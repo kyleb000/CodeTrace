@@ -54,6 +54,9 @@ void JCXFunctionAnalyser::process() {
 	_open_arg = true;
 	_close_arg = true;
 	
+	auto get_arg = find(begin(str), end(str), '(');
+	str.insert(get_arg, ' ');
+	
 	//we erase any spaces between the beginning of the string and the 
 	//first non space character
 	auto spacefnd = find(begin(str), end(str), ' ');
@@ -149,7 +152,7 @@ void JCXFunctionAnalyser::process() {
 	// gets the arguments from the parenthesis
 	//******************************************************************
 	
-	//erases any spaces ahead of the opening bracket
+	//adds the word that comes before the '(' to the function name
 	fnd_str = find(begin(str), end(str), '(');
 	function_name += string(begin(str), fnd_str);
 	
@@ -185,6 +188,7 @@ void JCXFunctionAnalyser::process() {
 		return;
 	}
 	
+	//we remove any spaces between the ( and the first nonspace character
 	while (true) {
 		if (*(open_arg+1) == ' ') {
 			str.erase(open_arg+1);

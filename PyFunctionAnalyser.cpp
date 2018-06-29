@@ -8,7 +8,7 @@ void PyFunctionAnalyser::process() {
 	string function_name; 
 	string function_type;
 	string function_args;
-	string& str = query;
+	string& str = *query;
 	
 	//Lambda function to determine whether a character is a space
 	auto not_space = [](char a) -> bool { return (a != ' '); };
