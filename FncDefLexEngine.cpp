@@ -1,11 +1,14 @@
 #include "FncDefLexEngine.hpp"
 #include "GetAnalyser.hpp"
+#include "GetRemover.hpp"
 #include "Token.hpp"
 #include "Type.hpp"
+#include <iostream>
 
 FncDefLexEngine::FncDefLexEngine(FileType f,  std::string fname, size_t* ln):
 IFlexEngine(fname,ln) {
 	analyser = get_analyser(f);
+	remover = get_remover(f);
 }
 
 /* This operator works by feeding a given string into a query, and 
@@ -13,7 +16,7 @@ IFlexEngine(fname,ln) {
  * requirements for a Token, the satisfied flag is set to true 
  * */
 IFlexEngine& FncDefLexEngine::operator<<(std::string& rhs) {
-	query += rhs;
+	query += (*remover)(rhs);
 	analyser << query;
 	analyser->process();
 	satisfied = (analyser->name() && analyser->type() && 

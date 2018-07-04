@@ -1,10 +1,10 @@
-#include "JCXFunctionAnalyser.hpp"
+#include "JCXFunctionAnalyser.hpp" 
 #include <string>
 #include <algorithm>
 #include <iterator>
 #include <sstream>
-#include <iostream>
 #include <functional>
+//#include <iostream>
 
 void JCXFunctionAnalyser::process() {
 	using std::string;
@@ -17,7 +17,7 @@ void JCXFunctionAnalyser::process() {
 	auto is_space = [] (char b) -> bool { return (b == ' '); };
 	
 	//lambda to compare strings. Feature: get these from a file instead of being hard coded
-	auto test_ign_words = [](string &s) -> bool {
+	auto test_ign_words = [] (string &s) -> bool {
 		if(s == "constexpr") return true;
 		else if(s == "inline") return true;
 		else if(s == "static") return true;
@@ -29,7 +29,7 @@ void JCXFunctionAnalyser::process() {
 	};
 	
 	//lambda to compare strings 
-	auto test_type_ext = [](string &s) -> bool {
+	auto test_type_ext = [] (string &s) -> bool {
 		if(s == "const") return true;
 		else if(s == "long") return true;
 		else if(s == "short") return true;
@@ -37,13 +37,98 @@ void JCXFunctionAnalyser::process() {
 		else if(s == "signed") return true;
 		else return false;
 	};
+	
+	//lambda function to ignore any C or C++ '#' symbols
+	auto hash_inc = [] (string s) -> bool {
+		if ((s.find("include") != string::npos || 
+			s.find("endif") != string::npos ||
+			s.find("if") != string::npos ||
+			s.find("define") != string::npos ||
+			s.find("ifndef") != string::npos ||
+			s.find("else") != string::npos)) return true;
+		else return false;
+	};
+	
+	auto fnd_chr = [] (char s) -> bool { return (s == '"' || s == '\''); };
+	
 	string& str = *query;
 	
+	if (str.size() == 0) return;
+	
+	auto hashtag = find(begin(str), end(str), '#');
+	if (hashtag != end(str)) {
+		if (*(hashtag+1) == ' ' || *(hashtag) == '\t') {
+			auto no_space = find_if(hashtag+1, end(str), not_space);
+			auto fnd_end_word = find(no_space, end(str), ' ');
+			if (hash_inc(string(no_space, fnd_end_word))){  
+				str = "";
+				return;
+			}
+		} else {
+			auto fnd_word = hashtag+1;
+			auto fnd_end_word = find(fnd_word, end(str), ' ');
+			if (hash_inc(string(fnd_word, fnd_end_word))){  
+				str = "";
+				return;
+			}
+		} 
+	}
+		
 	if (str.find(';') != string::npos && 
 	((str.find("(") == string::npos && str.find(")") == string::npos) || str.find(';') < str.find('('))) {
 		auto semi_find = find(begin(str), end(str), ';');
 		str.erase(begin(str), semi_find +1);
 	}
+	
+	while (true) {
+		auto fnd_first_chr = find_if(begin(str), end(str), fnd_chr);
+		if (fnd_first_chr != end(str)) {
+			char test = *fnd_first_chr;
+			auto fnd_next_chr = find(fnd_first_chr+1, end(str), test);
+			if (*(fnd_next_chr-1) == '\\') {
+				auto tmp = find(fnd_next_chr+1, end(str), test);
+				if (tmp != end(str)) fnd_next_chr = tmp;
+			}
+			str.erase(fnd_first_chr, fnd_next_chr+1);
+		}else break;
+	}
+	
+	open_curl = close_curl = 0;
+	
+	auto fnd_open_curl = find(begin(str), end(str), '{');
+	
+	while (true) {
+		if (fnd_open_curl != end(str)) {
+			++open_curl;
+			auto tmp = find(fnd_open_curl+1, end(str), '{');
+			if (tmp != end(str)) fnd_open_curl = tmp;
+			else break;
+		} else break;
+	}
+	auto fnd_close_curl = find(begin(str), end(str), '}');
+	
+	while (true) {
+		if (fnd_close_curl != end(str)) {
+			++close_curl;
+			auto tmp = find(fnd_close_curl+1, end(str), '}');
+			if (tmp != end(str)) fnd_close_curl = tmp;
+			else break;
+		} else break;
+	}
+	
+	if (open_curl == close_curl && open_curl != 0) {
+		fnd_open_curl = find(begin(str), end(str), '}');
+		str.erase(fnd_open_curl, fnd_close_curl+1);
+		open_curl = close_curl = 0;
+	} else if (open_curl != 0 || close_curl != 0) return;
+	
+	auto open_brac = find(begin(str), end(str), '(');
+	string test = string(begin(str), open_brac);
+	string tmp;
+	std::stringstream testss(test);
+	size_t words = 0;
+	while (testss >> tmp) ++words;
+	if (words < 2) return;
 	
 	//we test for the parenthesis to make sure we are dealing with a
 	//function. We exit the function if this is not the case
@@ -262,7 +347,6 @@ void JCXFunctionAnalyser::process() {
 		open_arg = find(begin(str), end(str), '(');
 		close_arg = find(begin(str), end(str), ')');
 	}
-	
 	//******************************************************************
 	
 	//******************************************************************
@@ -326,5 +410,6 @@ void JCXFunctionAnalyser::process() {
 	fnc_data.push_back(function_type);
 	fnc_data.push_back(function_args);
 	str = "";
-	query = nullptr;
 }
+
+void say_hello () { return; }
