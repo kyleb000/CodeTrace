@@ -1,10 +1,12 @@
 #include "JCXFunctionAnalyser.hpp" 
+#include "Files.hpp"
 #include <string>
 #include <algorithm>
 #include <iterator>
 #include <sstream>
+#include <fstream>
+#include <vector>
 #include <functional>
-//#include <iostream>
 
 void JCXFunctionAnalyser::process() {
 	using std::string;
@@ -16,70 +18,74 @@ void JCXFunctionAnalyser::process() {
 	auto not_space = [](char a) -> bool { return (a != ' '); };
 	auto is_space = [] (char b) -> bool { return (b == ' '); };
 	
-	//lambda to compare strings. Feature: get these from a file instead of being hard coded
-	auto test_ign_words = [] (string &s) -> bool {
-		if(s == "constexpr") return true;
-		else if(s == "inline") return true;
-		else if(s == "static") return true;
-		else if(s == "volatile") return true;
-		else if(s == "public") return true;
-		else if(s == "private") return true;
-		else if(s == "protected") return true;
-		else return false;
+	//lambda to compare a string to strings in a file
+	auto test_words = [] (string query, const char* file) -> bool {
+		std::ifstream ign_file(file);
+		std::string word;
+		std::vector<std::string> words;
+		while(ign_file >> word) words.push_back(word);
+		return (find(begin(words), end(words), query) != end(words));
 	};
 	
-	//lambda to compare strings 
-	auto test_type_ext = [] (string &s) -> bool {
-		if(s == "const") return true;
-		else if(s == "long") return true;
-		else if(s == "short") return true;
-		else if(s == "unsigned") return true;
-		else if(s == "signed") return true;
-		else return false;
-	};
-	
-	//lambda function to ignore any C or C++ '#' symbols
-	auto hash_inc = [] (string s) -> bool {
-		if ((s.find("include") != string::npos || 
-			s.find("endif") != string::npos ||
-			s.find("if") != string::npos ||
-			s.find("define") != string::npos ||
-			s.find("ifndef") != string::npos ||
-			s.find("else") != string::npos)) return true;
-		else return false;
-	};
-	
+	//lambda to find quotes
 	auto fnd_chr = [] (char s) -> bool { return (s == '"' || s == '\''); };
 	
 	string& str = *query;
 	
 	if (str.size() == 0) return;
 	
+	//here we remove the # strings 
 	auto hashtag = find(begin(str), end(str), '#');
 	if (hashtag != end(str)) {
+		//if spaces are found, we find the first nonspace character
 		if (*(hashtag+1) == ' ' || *(hashtag) == '\t') {
 			auto no_space = find_if(hashtag+1, end(str), not_space);
 			auto fnd_end_word = find(no_space, end(str), ' ');
-			if (hash_inc(string(no_space, fnd_end_word))){  
+			
+			//delete the string if the condition is true
+			if (test_words(string(no_space, fnd_end_word), F_HASHTG)){  
 				str = "";
 				return;
 			}
 		} else {
+			//no spaces here
 			auto fnd_word = hashtag+1;
 			auto fnd_end_word = find(fnd_word, end(str), ' ');
-			if (hash_inc(string(fnd_word, fnd_end_word))){  
+			if (test_words(string(fnd_word, fnd_end_word), F_HASHTG)){  
 				str = "";
 				return;
 			}
 		} 
 	}
-		
+	
+	//here we remove any statements
 	if (str.find(';') != string::npos && 
 	((str.find("(") == string::npos && str.find(")") == string::npos) || str.find(';') < str.find('('))) {
 		auto semi_find = find(begin(str), end(str), ';');
 		str.erase(begin(str), semi_find +1);
 	}
 	
+	//here we test if the string we are looking for is a function declaration
+	//by checking if it has () and two words preceding them
+	auto open_brac = find(begin(str), end(str), '(');
+	auto close_brac = find(open_brac, end(str), ')');
+	if (open_brac != end(str) && close_brac != end(str)) {
+		string test = string(begin(str), open_brac);
+		string tmp;
+		std::stringstream testss(test);
+		size_t words = 0;
+		while (testss >> tmp) ++words;
+		if (words < 2) return;
+		else if (!ignore) { 
+			line = *tmp_line;
+			ignore = true;
+		}
+	}
+	
+	//we will only continue working if we find an open curly
+	if (str.find("{") == string::npos) return;
+	
+	//here we remove any string literals
 	while (true) {
 		auto fnd_first_chr = find_if(begin(str), end(str), fnd_chr);
 		if (fnd_first_chr != end(str)) {
@@ -93,10 +99,13 @@ void JCXFunctionAnalyser::process() {
 		}else break;
 	}
 	
+	//we reset the counters
 	open_curl = close_curl = 0;
 	
+	//we remove curly braces in order to not confuse the program
 	auto fnd_open_curl = find(begin(str), end(str), '{');
 	
+	//we find all counts of open curly braces
 	while (true) {
 		if (fnd_open_curl != end(str)) {
 			++open_curl;
@@ -107,6 +116,7 @@ void JCXFunctionAnalyser::process() {
 	}
 	auto fnd_close_curl = find(begin(str), end(str), '}');
 	
+	//we find all counts of closing curly braces
 	while (true) {
 		if (fnd_close_curl != end(str)) {
 			++close_curl;
@@ -116,19 +126,14 @@ void JCXFunctionAnalyser::process() {
 		} else break;
 	}
 	
+	//we only delete the body of the function if the number of open
+	//curly braces matches the number of closing curly braces
 	if (open_curl == close_curl && open_curl != 0) {
-		fnd_open_curl = find(begin(str), end(str), '}');
+		fnd_open_curl = find(begin(str), end(str), '{');
 		str.erase(fnd_open_curl, fnd_close_curl+1);
 		open_curl = close_curl = 0;
+		ignore = false;
 	} else if (open_curl != 0 || close_curl != 0) return;
-	
-	auto open_brac = find(begin(str), end(str), '(');
-	string test = string(begin(str), open_brac);
-	string tmp;
-	std::stringstream testss(test);
-	size_t words = 0;
-	while (testss >> tmp) ++words;
-	if (words < 2) return;
 	
 	//we test for the parenthesis to make sure we are dealing with a
 	//function. We exit the function if this is not the case
@@ -164,7 +169,7 @@ void JCXFunctionAnalyser::process() {
 	//the word matches anything in the list
 	while (true) {
 		string test(begin(str), fnd_str);
-		if (test_ign_words(test)) {
+		if (test_words(test, F_IGNORE)) {
 			str.erase(begin(str), fnd_str);
 			fnd_str = find(begin(str), end(str), ' ');
 		}
@@ -190,7 +195,7 @@ void JCXFunctionAnalyser::process() {
 		string test(begin(str), fnd_str);
 		
 		//we check if it matches any entries in a list
-		if (test_type_ext(test)){
+		if (test_words(test, F_EXTEND)){
 			
 			//we copy this value to the pre_ret string
 			pre_ret = string(begin(str), begin(str) + test.length());
@@ -411,5 +416,3 @@ void JCXFunctionAnalyser::process() {
 	fnc_data.push_back(function_args);
 	str = "";
 }
-
-void say_hello () { return; }

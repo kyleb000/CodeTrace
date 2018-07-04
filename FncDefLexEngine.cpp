@@ -17,6 +17,7 @@ IFlexEngine(fname,ln) {
  * */
 IFlexEngine& FncDefLexEngine::operator<<(std::string& rhs) {
 	query += (*remover)(rhs);
+	analyser->set_line(line);
 	analyser << query;
 	analyser->process();
 	satisfied = (analyser->name() && analyser->type() && 
@@ -33,7 +34,7 @@ Token* FncDefLexEngine::get() {
 	analyser->clear();
 	satisfied = false;
 	query = "";
-	return new Token(std::move(s), filename, *line, Type::T_FUNC_DEFN, nullptr, nullptr);
+	return new Token(std::move(s), filename, analyser->get_line(), Type::T_FUNC_DEFN, nullptr, nullptr);
 }
 
 /* This function returns the state of the satisfied variable */
