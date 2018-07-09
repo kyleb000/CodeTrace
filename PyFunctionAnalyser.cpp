@@ -2,6 +2,7 @@
 #include <functional>
 #include <algorithm>
 #include <sstream>
+#include <iostream>
 
 void PyFunctionAnalyser::process() {
 	using std::string;
@@ -9,7 +10,7 @@ void PyFunctionAnalyser::process() {
 	string function_type;
 	string function_args;
 	string& str = *query;
-	
+
 	//Lambda function to determine whether a character is a space
 	auto not_space = [](char a) -> bool { return (a != ' '); };
 	
@@ -34,6 +35,7 @@ void PyFunctionAnalyser::process() {
 	//we only work with the rest of the string if we can find a 'def'
 	//and a ':'
 	if(find_def(test) && str.find(":") != string::npos) {
+		line = *tmp_line;
 		
 		//we cannot determine the type of the function in Python
 		function_type = "none";
@@ -99,6 +101,7 @@ void PyFunctionAnalyser::process() {
 		
 	} else {
 		//don't do anything if not a function
+		str = "";
 		return;
 	}
 }

@@ -35,7 +35,7 @@ public:
 protected:
 	std::vector<std::string> fnc_data;
 	std::string* query;
-	size_t* tmp_line;
+	size_t* tmp_line{nullptr};
 	bool _type{false},
 		 _name{false},
 		 _open_arg{false},

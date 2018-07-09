@@ -6,8 +6,10 @@
 class PyFunctionAnalyser : public IFunctionAnalyser {
 public:
 	PyFunctionAnalyser(){}
-	~PyFunctionAnalyser() = default;
+	~PyFunctionAnalyser() {};
 	void process() override;
-	size_t get_line() const override { return 0; }
+	size_t get_line() const override { return line; }
+private:
+	size_t line{0};
 };
 #endif
