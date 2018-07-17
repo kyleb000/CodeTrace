@@ -18,6 +18,7 @@ IFlexEngine(fname,ln) {
 IFlexEngine& FncDefLexEngine::operator<<(std::string& rhs) {
 	query += (*remover)(rhs);
 	analyser->set_line(line);
+	analyser->get_name(filename);
 	analyser << query;
 	analyser->process();
 	satisfied = (analyser->name() && analyser->type() && 

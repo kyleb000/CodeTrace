@@ -3,16 +3,17 @@
 #include <string>
 #include <algorithm>
 #include <iterator>
-#include <sstream>
 #include <fstream>
 #include <vector>
 #include <functional>
+#include <iostream>
+#include <tuple>
 
 void JCXFunctionAnalyser::process() {
 	using std::string;
-	string function_name; 
-	string function_type;
+	std::stringstream strs;
 	string function_args;
+	string function_name; 
 	
 	//lambda functions to find the presence or absence of spaces
 	auto not_space = [](char a) -> bool { return (a != ' '); };
@@ -30,9 +31,55 @@ void JCXFunctionAnalyser::process() {
 	//lambda to find quotes
 	auto fnd_chr = [] (char s) -> bool { return (s == '"' || s == '\''); };
 	
+	auto brac_find = [] (string& s) -> std::tuple<bool, std::string::iterator, std::string::iterator> {
+		auto is_brac = [] (char c) -> bool { return (c == '{' || c == '}'); };
+		//we reset the counters
+		size_t open_curl = 0;
+		size_t close_curl = 0;
+		bool b{false};
+		
+		//we remove curly braces in order to not confuse the program
+		auto fnd_curl = find_if(begin(s), end(s), is_brac);
+		
+		//we find all counts of open and close curly braces
+		while (true) {
+			if (fnd_curl != end(s) && !(open_curl == close_curl && open_curl !=0)) {
+				if (*fnd_curl == '{') ++open_curl; else ++ close_curl;
+				fnd_curl = find_if(fnd_curl+1, end(s), is_brac); 
+			} else break;
+		}
+		
+		auto fnd_open_curl = find(begin(s), end(s), '{');
+		auto fnd_close_curl = find(begin(s), end(s), '}');
+		
+		//we only delete the body of the function if the number of open
+		//curly braces matches the number of closing curly braces
+		if (open_curl == close_curl && open_curl != 0) {
+			size_t tmp_sz = close_curl;
+			while ((--tmp_sz) > 0) {
+				if (fnd_close_curl == end(s)) break;
+				fnd_close_curl = find(fnd_close_curl+1, end(s), '}');
+			}
+			b = true;
+		} else if (open_curl != 0 || close_curl != 0) b = false;
+		return std::tuple<bool, std::string::iterator, std::string::iterator>(b, fnd_open_curl, fnd_close_curl);
+	};
+	
 	string& str = *query;
 	
 	if (str.size() == 0) return;
+	
+	//here we handle any classes we find in the query
+	if (str.find("class") != string::npos) {
+		++class_cnt;
+		auto fnd_class_brac = find(begin(str), end(str), '{');
+		if (fnd_class_brac != end(str)) str.erase(begin(str), fnd_class_brac+1);
+		else return;
+	}
+	
+	// we deal with the closing curly bracket of the class
+	auto fnd_str_beg = find_if(begin(str), end(str), not_space);
+	if (*fnd_str_beg == '}') str = "";
 	
 	//here we remove the # strings 
 	auto hashtag = find(begin(str), end(str), '#');
@@ -59,10 +106,47 @@ void JCXFunctionAnalyser::process() {
 	}
 	
 	//here we remove any statements
-	if (str.find(';') != string::npos && 
-	((str.find("(") == string::npos && str.find(")") == string::npos) || str.find(';') < str.find('('))) {
+	if (str.find(';') != string::npos && (str.find("(") == string::npos && str.find(")") == string::npos)) {
 		auto semi_find = find(begin(str), end(str), ';');
 		str.erase(begin(str), semi_find +1);
+	}
+	
+	//here we remove any statements
+	if (str.find(';') != string::npos && str.find(';') < str.find('(')) {
+		auto semi_find = find(begin(str), end(str), ';');
+		str.erase(begin(str), semi_find +1);
+	}
+	
+	//we check if the function is a template function
+	switch(get()) {
+		case FileType::FILE_CXX:
+			is_template = ((str.find("template") != string::npos));
+			break;
+		case FileType::FILE_JAVA:
+			is_template = (str.find('<') != string::npos && str.find('>') != string::npos);
+			break;
+		default:
+			break;
+	}
+	
+	//we try to get the entire template definition in one line
+	if (!temp_remove && is_template && ((str.find('<') == string::npos) && (str.find('>') == string::npos))) return;
+	
+	
+	//here we remove the template arguments
+	if (!temp_remove && str.find('<') != string::npos && is_template) {
+		auto fnd_templ_gt = find(begin(str), end(str), '<');
+		auto fnd_templ_lt = find(fnd_templ_gt, end(str), '>');
+		str.erase(fnd_templ_gt, fnd_templ_lt+1);
+		temp_remove = true;
+	}
+	
+	//we remove the template word from the query
+	if (is_template) {
+		function_type = "<template>";
+		auto pos = str.find("template");
+		if (pos != string::npos)
+		str.erase(pos, string("template").length());
 	}
 	
 	//here we test if the string we are looking for is a function declaration
@@ -82,8 +166,8 @@ void JCXFunctionAnalyser::process() {
 		}
 	}
 	
-	//we will only continue working if we find an open curly
-	if (str.find("{") == string::npos) return;
+	//we will only continue working if we find an open curly or a semi colon
+	if (str.find("{") == string::npos && str.find(";") == string::npos) return;
 	
 	//here we remove any string literals
 	while (true) {
@@ -99,47 +183,24 @@ void JCXFunctionAnalyser::process() {
 		}else break;
 	}
 	
-	//we reset the counters
-	open_curl = close_curl = 0;
-	
-	//we remove curly braces in order to not confuse the program
-	auto fnd_open_curl = find(begin(str), end(str), '{');
-	
-	//we find all counts of open curly braces
-	while (true) {
-		if (fnd_open_curl != end(str)) {
-			++open_curl;
-			auto tmp = find(fnd_open_curl+1, end(str), '{');
-			if (tmp != end(str)) fnd_open_curl = tmp;
-			else break;
-		} else break;
-	}
-	auto fnd_close_curl = find(begin(str), end(str), '}');
-	
-	//we find all counts of closing curly braces
-	while (true) {
-		if (fnd_close_curl != end(str)) {
-			++close_curl;
-			auto tmp = find(fnd_close_curl+1, end(str), '}');
-			if (tmp != end(str)) fnd_close_curl = tmp;
-			else break;
-		} else break;
-	}
+	auto fnd_bracs = brac_find(str);
 	
 	//we only delete the body of the function if the number of open
 	//curly braces matches the number of closing curly braces
-	if (open_curl == close_curl && open_curl != 0) {
-		fnd_open_curl = find(begin(str), end(str), '{');
-		str.erase(fnd_open_curl, fnd_close_curl+1);
-		open_curl = close_curl = 0;
+	if (std::get<0>(fnd_bracs)) {
+		str.erase(std::get<1>(fnd_bracs), std::get<2>(fnd_bracs)+1);
 		ignore = false;
-	} else if (open_curl != 0 || close_curl != 0) return;
+	} else return;
+	
+	//std::cout << str << std::endl;
 	
 	//we test for the parenthesis to make sure we are dealing with a
 	//function. We exit the function if this is not the case
 	if (str.find("(") == string::npos || str.find(")") == string::npos) {
 		return;
 	}
+	
+	if (str.find(';') > str.find(')')) ignore = false;
 	
 	_open_arg = true;
 	_close_arg = true;
@@ -274,6 +335,8 @@ void JCXFunctionAnalyser::process() {
 		fnc_data.push_back(function_name);
 		fnc_data.push_back(function_type);
 		fnc_data.push_back(function_args);
+		function_type = "";
+		is_template = temp_remove = false;
 		str = "";
 		return;
 	}
@@ -329,90 +392,107 @@ void JCXFunctionAnalyser::process() {
 		close_arg = find(begin(str), end(str), ')');
 		ptr_find = find(open_arg, close_arg, '*');
 	}
+
+	if (!is_template) {
 	
-	//we get the name of the argument by using the space after the
-	//type and the separating comma
-	auto space_arg = find(open_arg, close_arg, ' ');
-	auto com_arg = find(open_arg, close_arg, ',');
-	
-	//we go through all the arguments
-	while (find(open_arg, close_arg, ',') != close_arg) {
+		//we get the name of the argument by using the space after the
+		//type and the separating comma
+		auto space_arg = find(open_arg, close_arg, ' ');
+		auto com_arg = find(open_arg, close_arg, ',');
 		
-		//we erase the name, the spaces and the comma
-		str.erase(space_arg, com_arg+1);
-		
-		//if we find more commas, we get the new space and
-		//comma position
-		if (find(open_arg, close_arg, ',') != close_arg) {
-			space_arg = find(space_arg+1, close_arg, ' ');
-			com_arg = find(open_arg, close_arg, ',');
-		}
-		
-		//get the new position of the brackets
-		open_arg = find(begin(str), end(str), '(');
-		close_arg = find(begin(str), end(str), ')');
-	}
-	//******************************************************************
-	
-	//******************************************************************
-	//removing spaces from the arguments
-	//******************************************************************
-	
-	//here we work with the argument names in the brackets
-	string args(open_arg, close_arg+1);
-	
-	//we get the character before the closing bracket
-	auto fnd_l_space = end(args)-2;
-	
-	//here we remove any spaces between the closing bracket and the 
-	//last nonspace character
-	while(true) {
-		
-		//we decrease the iterator if it is a space
-		if (*fnd_l_space == ' ') --fnd_l_space;
-		else {
+		//we go through all the arguments
+		while (find(open_arg, close_arg, ',') != close_arg) {
 			
-			//we make sure it is not the same character
-			if (fnd_l_space != end(args)-2)
-				args.erase(fnd_l_space+1, end(args)-1);
-			break;
+			//we erase the name, the spaces and the comma
+			str.erase(space_arg, com_arg+1);
+			
+			//if we find more commas, we get the new space and
+			//comma position
+			if (find(open_arg, close_arg, ',') != close_arg) {
+				space_arg = find(space_arg+1, close_arg, ' ');
+				com_arg = find(open_arg, close_arg, ',');
+			}
+			
+			//get the new position of the brackets
+			open_arg = find(begin(str), end(str), '(');
+			close_arg = find(begin(str), end(str), ')');
 		}
-	}
+		//******************************************************************
+		
+		//******************************************************************
+		//removing spaces from the arguments
+		//******************************************************************
+		
+		//here we work with the argument names in the brackets
+		string args(open_arg, close_arg+1);
+		
+		//we get the character before the closing bracket
+		auto fnd_l_space = end(args)-2;
+		
+		//here we remove any spaces between the closing bracket and the 
+		//last nonspace character
+		while(true) {
+			
+			//we decrease the iterator if it is a space
+			if (*fnd_l_space == ' ') --fnd_l_space;
+			else {
+				
+				//we make sure it is not the same character
+				if (fnd_l_space != end(args)-2)
+					args.erase(fnd_l_space+1, end(args)-1);
+				break;
+			}
+		}
+		
+		//here we remove the last argument name, as there is no comma to
+		//help find it
+		
+		//get the reverse iterator that gets to a space. this space is 
+		//between the name of the argument and the type of the argument
+		auto r_space = find_if(rbegin(args), rend(args), is_space);
+		
+		//we erase everything between the reverse iterator and the closing
+		//bracket
+		args.erase(std::next(r_space).base(), end(args)-1);
+		
+		//we remove all the spaces in the string
+		while (args.find(' ') != string::npos) {
+			auto fnd = find(begin(args), end(args), ' ');
+			args.erase(fnd, fnd+1);
+		}
+		
+		//we remove the open and close bracket
+		args.erase(0,1);
+		args.erase(args.length()-1, args.length());
+		
+		//here we create a hash of the argument types
+		using std::hash;
+		size_t str_hash = hash<string>{}(args);
+		
+		strs << str_hash;
 	
-	//here we remove the last argument name, as there is no comma to
-	//help find it
-	
-	//get the reverse iterator that gets to a space. this space is 
-	//between the name of the argument and the type of the argument
-	auto r_space = find_if(rbegin(args), rend(args), is_space);
-	
-	//we erase everything between the reverse iterator and the closing
-	//bracket
-	args.erase(std::next(r_space).base(), end(args)-1);
-	
-	//we remove all the spaces in the string
-	while (args.find(' ') != string::npos) {
-		auto fnd = find(begin(args), end(args), ' ');
-		args.erase(fnd, fnd+1);
-	}
-	
-	//we remove the open and close bracket
-	args.erase(0,1);
-	args.erase(args.length()-1, args.length());
-	
-	//here we create a hash of the argument types
-	using std::hash;
-	size_t str_hash = hash<string>{}(args);
+	} else {
+		size_t args = 0;
+		auto comm_find = find(open_arg, close_arg, ',');
+		if (comm_find != close_arg) {
+			while (comm_find != close_arg) {
+				++args;
+				comm_find = find(comm_find+1, close_arg, ',');
+			}
+			++args;
+		} else {
+			auto fnd_no_space = find_if(open_arg+1, end(str), not_space);
+			if (fnd_no_space != close_arg) ++args;
+		}
+		strs << "args:" << args;
+		is_template = temp_remove = false;
+	}	
 	
 	//******************************************************************
-	
-	std::stringstream strs;
-	
-	strs << str_hash;
 	
 	function_args += strs.str();
 	fnc_data.push_back(function_name);
 	fnc_data.push_back(function_type);
 	fnc_data.push_back(function_args);
-	str = "";
+	function_type = "";
 }

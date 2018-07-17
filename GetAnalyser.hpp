@@ -12,7 +12,9 @@ IFunctionAnalyser* get_analyser(FileType type) {
 			return new PyFunctionAnalyser();
 			break;
 		default:
-			return new JCXFunctionAnalyser();
+			JCXFunctionAnalyser* tmp = new JCXFunctionAnalyser();
+			tmp->set(type);
+			return tmp;
 	}
 }
 

@@ -32,9 +32,11 @@ public:
 		_type = _name = _open_arg = _close_arg = _args = false;
 		fnc_data.erase(fnc_data.begin(), fnc_data.end());
 	}
+	void get_name (std::string fname) { filename = fname; }
 protected:
 	std::vector<std::string> fnc_data;
 	std::string* query;
+	std::string filename;
 	size_t* tmp_line{nullptr};
 	bool _type{false},
 		 _name{false},
