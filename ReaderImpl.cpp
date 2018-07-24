@@ -5,7 +5,7 @@
 #include "Lex.hpp"
 #include <fstream>
 #include <iostream>
-#include "TokenTracker.hpp"
+//#include "TokenTracker.hpp"
 #include "DirIter.hpp"
 #include <vector>
 #include <thread>
@@ -42,10 +42,11 @@ void Reader::ReaderImpl::find(FindMode mode, std::string* fpath) {
 		std::ifstream infile(file);
 		std::string s;
 		Lex lex(t);
+		std::cout << s << std::endl;
 		while (getline(infile, s)) {
 			lex << s;
 			if (lex.is_satisfied())
-				*tracker << lex();
+				//*tracker << lex();
 		}
 	};
 	
@@ -64,12 +65,15 @@ void Reader::ReaderImpl::find(FindMode mode, std::string* fpath) {
 		std::vector<std::thread> tvec;
 		while((*dir_reader) != 0) {
 			Directory dir = std::move((*dir_reader)());
+			std::cout << dir.size() << std::endl;
 			for (auto e = dir.begin(); e != dir.end(); ++e) {
+				std::cout << *(*e) << std::endl;
 				size_t sz = 4;
 				while ((--sz) != 0 && e != dir.end()) {
 					std::thread thr(&Reader::ReaderImpl::find, this, FindMode::MODE_CURDIR, *e);
 					tvec.push_back(std::move(thr));
 				}
+				std::cout << tvec.size() << std::endl;
 				std::this_thread::sleep_for(std::chrono::milliseconds(50));
 				for (auto& e : tvec) {
 					e.join();

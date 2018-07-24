@@ -32,6 +32,7 @@ public:
 		_type = _name = _open_arg = _close_arg = _args = false;
 		fnc_data.erase(fnc_data.begin(), fnc_data.end());
 	}
+	void clear_data() { fnc_data.erase(fnc_data.begin(), fnc_data.end()); }
 	void get_name (std::string fname) { filename = fname; }
 protected:
 	std::vector<std::string> fnc_data;

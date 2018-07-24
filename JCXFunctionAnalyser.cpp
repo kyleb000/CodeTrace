@@ -65,21 +65,44 @@ void JCXFunctionAnalyser::process() {
 		return std::tuple<bool, std::string::iterator, std::string::iterator>(b, fnd_open_curl, fnd_close_curl);
 	};
 	
+	auto erase_spaces = [] (string &s) {
+		auto spacefnd = find(begin(s), end(s), ' ');
+		while(true) {
+			if (spacefnd == begin(s)) {
+				s.erase(begin(s), begin(s)+1);
+				spacefnd = find(begin(s), end(s), ' ');
+			}else break;
+		}
+	};
+	
 	string& str = *query;
 	
 	if (str.size() == 0) return;
 	
 	//here we handle any classes we find in the query
 	if (str.find("class") != string::npos) {
-		++class_cnt;
+		//++class_cnt;
+		str.erase(begin(str), begin(str)+5);
+		erase_spaces(str);
+		string s(begin(str), find_if(begin(str), end(str), is_space));
+		str.erase(begin(str), begin(str)+s.length());
+		s += "::";
+		classes.push_back(s);
 		auto fnd_class_brac = find(begin(str), end(str), '{');
 		if (fnd_class_brac != end(str)) str.erase(begin(str), fnd_class_brac+1);
 		else return;
 	}
 	
+	for (auto e : classes) {
+		function_name += e;
+	}
+	
 	// we deal with the closing curly bracket of the class
 	auto fnd_str_beg = find_if(begin(str), end(str), not_space);
-	if (*fnd_str_beg == '}') str = "";
+	if (*fnd_str_beg == '}') { 
+		classes.pop_back();
+		str = "";
+	}
 	
 	//here we remove the # strings 
 	auto hashtag = find(begin(str), end(str), '#');
@@ -192,7 +215,6 @@ void JCXFunctionAnalyser::process() {
 		ignore = false;
 	} else return;
 	
-	//std::cout << str << std::endl;
 	
 	//we test for the parenthesis to make sure we are dealing with a
 	//function. We exit the function if this is not the case
@@ -337,7 +359,11 @@ void JCXFunctionAnalyser::process() {
 		fnc_data.push_back(function_args);
 		function_type = "";
 		is_template = temp_remove = false;
-		str = "";
+		auto fnd_end_brc = find(begin(str), end(str), ')');
+		str.erase(begin(str), fnd_end_brc+1);
+		if (str.find('{') == string::npos && str.find('(') == string::npos) {
+			str = "";
+		}
 		return;
 	}
 	
@@ -489,6 +515,9 @@ void JCXFunctionAnalyser::process() {
 	}	
 	
 	//******************************************************************
+	
+	auto fnd_end_brc = find(begin(str), end(str), ')');
+	str.erase(begin(str), fnd_end_brc+1);
 	
 	function_args += strs.str();
 	fnc_data.push_back(function_name);

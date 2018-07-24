@@ -24,6 +24,6 @@ private:
 	bool ignore{false};
 	bool is_template{false};
 	bool temp_remove{false};
-	std::vector<std::string::iterator> classes;
+	std::vector<std::string> classes;
 };
 #endif

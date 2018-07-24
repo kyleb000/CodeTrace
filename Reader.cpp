@@ -1,8 +1,7 @@
 #include "ReaderImpl.hpp"
-#include "FileIterator.hpp"
 
-Reader::Reader() {
-	impl = new ReaderImpl(this);
+Reader::Reader(DirectoryReader *dr) {
+	impl = new ReaderImpl(this, dr);
 }
 
 Reader::~Reader() {
@@ -31,10 +30,7 @@ Reader& Reader::operator =(Reader&& reader) {
 }
 
 void Reader::find(FindMode mode) {
-	impl->find(mode);
+	impl->find(mode,nullptr);
 }
 
-void Reader::load(Directory* dir) {
-	impl->load(dir);
-}
 
